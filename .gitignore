@@ -1,0 +1,6 @@
+/venv/
+/.idea/
+/login_data.txt/
+geckodriver.exe
+geckodriver.log
+Результаты поиска.txt
