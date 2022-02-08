@@ -1,7 +1,7 @@
 # Huntflow-Search
 
 Для работы в директории требуется: 
-geckgodriver.exe
+geckgodriver.exe \
 login_data.txt:
   <pre>
   почта
