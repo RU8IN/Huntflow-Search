@@ -24,15 +24,13 @@ with open('login_data.txt', 'r', encoding='utf-8') as file:
 class HuntflowSearch():
     def __init__(self):
         self.huntflow_url = "https://huntflow.ru/my/recruit-online#applicants"
-        self.user_agent = 'user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (HTML, like Gecko) Chrome/91.0.4472.106 Safari/537.36'
+        self.user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:99.0) Gecko/20100101 Firefox/99.0'
         self.options = webdriver.FirefoxOptions()
         self.options.set_preference("general.useragent.override", self.user_agent)
         self.options.set_preference("dom.webdriver.enabled", False)
 
         self.options.headless = False
 
-        # self.user_profile_path = f"C:/Users/{os.environ.get('USERNAME')}/AppData/Roaming/Mozilla/Firefox/Profiles/eupfatba.default"
-        # self.user_profile_path = f"C:/Users/Milena/AppData/Roaming/Mozilla/Firefox/Profiles/99h8vs9e.default-release"
         self.user_profile_path = firefox_profile_link.replace("\\", "/")
         self.firefox_profile = webdriver.FirefoxProfile(self.user_profile_path)
 
@@ -138,8 +136,6 @@ class HuntflowSearch():
         print('Прогрузилось')
         print(f'Кандидат: {name}  |  Ссылка: {huntflow_link}')
         try:
-            # WebDriverWait(self.driver, 90).until(
-            #     EC.presence_of_element_located((By.XPATH, "//*[@class='_2lMWa']")))
             pole = self.driver.find_elements_by_xpath("//*[@class='_13NKt copyable-text selectable-text']")[1]
             print('Поле найдено')
             pole.click()
@@ -227,19 +223,16 @@ class HuntflowSearch():
             try:
                 candidate_link = self.driver.find_element_by_class_name("active--2F4Qd").find_element_by_tag_name(
                     "a").get_attribute("href")
-                a = self.driver.find_element_by_class_name("applicant-card-title__header").get_attribute(
-                    "textContent").split(' ')
-                if len(a) == 31:
-                    name = a[17].replace('\n', '').replace(' ', '')
-                elif len(a) == 30:
-                    name = a[16].replace('\n', '').replace(' ', '')
+                name = self.driver.find_element_by_class_name("title--zagSG").get_attribute(
+                    "textContent").split(' ')[5].strip()
 
-                if "фио" in name.lower():
+                if "фио" in name.lower() or "неизвестно" in name.lower():
                     self.SetHuntflowStatus("позвонить")
                     time.sleep(1)
                     continue
+                phone_number = re.sub(r"\D", "", self.driver.find_element_by_xpath("//*[@class='phone--DtMb2 link--1k7bx']").get_attribute("textContent"))
                 all_whatsapp_links[
-                    name] = f'{self.driver.find_element_by_class_name("applicant-card__phone-apps").find_elements_by_tag_name("a")[0].get_attribute("href")} '
+                    name] = f"https://wa.me/{phone_number} "
                 all_candidate_links[name] = candidate_link
                 k += 1
             except:
@@ -247,7 +240,6 @@ class HuntflowSearch():
             if k > int(quantity) + 5:
                 print("breaked")
                 break
-            print(name)
             time.sleep(1)
         return [all_whatsapp_links, all_candidate_links]
 
@@ -502,20 +494,20 @@ class HuntflowSearch():
 
         try:
             print("Clicked on tag")
-            time.sleep(2)
+            time.sleep(15)
             self.driver.find_element_by_class_name("root--pbFXB").click()
-            visible_amount_of_candidates = len(
-                self.driver.find_elements_by_xpath("//*[@class='root--2MJQk']/*[contains(@class, 'root--pbFXB')]"))
-            print(visible_amount_of_candidates, actual_amount_of_candidates)
-            while visible_amount_of_candidates != actual_amount_of_candidates:
-                self.driver.find_element_by_xpath(
-                    "//*[@class='layout__list js-layout-sidebar js-applicant-items']").click()
-                self.driver.find_element_by_xpath(
-                    "//*[@class='layout__list js-layout-sidebar js-applicant-items']").send_keys(Keys.END)
-                time.sleep(2.5)
-                visible_amount_of_candidates = len(
-                    self.driver.find_elements_by_xpath("//*[@class='root--2MJQk']/*[contains(@class, 'root--pbFXB')]"))
-                print(visible_amount_of_candidates)
+            # visible_amount_of_candidates = len(
+            #     self.driver.find_elements_by_xpath("//*[@class='root--2MJQk']/*[contains(@class, 'root--pbFXB')]"))
+            # print(visible_amount_of_candidates, actual_amount_of_candidates)
+            # while visible_amount_of_candidates != actual_amount_of_candidates:
+            #     self.driver.find_element_by_xpath(
+            #         "//*[@class='layout__list js-layout-sidebar js-applicant-items']").click()
+            #     self.driver.find_element_by_xpath(
+            #         "//*[@class='layout__list js-layout-sidebar js-applicant-items']").send_keys(Keys.END)
+            #     time.sleep(2.5)
+            #     visible_amount_of_candidates = len(
+            #         self.driver.find_elements_by_xpath("//*[@class='root--2MJQk']/*[contains(@class, 'root--pbFXB')]"))
+            #     print(visible_amount_of_candidates)
         except Exception as ex:
             print(ex)
 

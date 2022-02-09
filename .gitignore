@@ -1,6 +1,10 @@
 /venv/
 /.idea/
+/dist/
+/build/
+/__pycache__/
 *.exe
 *.txt
 *.log
+*.spec
 !requirements.txt
