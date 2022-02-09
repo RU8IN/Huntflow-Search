@@ -1,19 +1,18 @@
 import os
 import queue
+import re
 import shutil
 import time
 from random import uniform
 from threading import Thread
 
 import PySimpleGUI as sg
+import selenium.common.exceptions
 from selenium import webdriver
-from selenium.webdriver import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
-from selenium.webdriver.firefox.options import Options
-import re
 
 # Entering email and password
 
@@ -206,28 +205,13 @@ class HuntflowSearch():
     def ClickOnTag(self, tag="В работе", need_amount=False):
         time.sleep(1)
         tag_span = self.driver.find_elements_by_xpath(
-            f"//*[@class='item--2IRYQ']")
+            "//*[@class='item--2IRYQ']")
 
         for current_tag in tag_span:
-            print(current_tag.get_attribute("textContent").lower())
-            if tag.lower() in current_tag.get_attribute("textContent").lower():
+            if tag.lower() in current_tag.get_attribute("textContent").lower().strip():
+                time.sleep(1)
                 current_tag.click()
-
-        amount_of_candidates = int(tag_span.find_element_by_tag_name("span").text) if need_amount else None
-
-        # try:
-        #     tag_span.click()
-        # except:
-        #     Прокрутка направо, пока не поулчится нажать на определённый тег
-            # while True:
-            #     try:
-        #             tag_span.click()
-        #             break
-        #         except:
-        #             self.driver.find_element_by_xpath("//*[contains(@class, 'rightArrowButton--2A5Ca')]").click()
-        #             time.sleep(0.5)
-        # if need_amount:
-        #     return amount_of_candidates
+                break
         return
 
     def GetAllCandidatesWhatsAppLinks(self, quantity):
@@ -283,67 +267,91 @@ class HuntflowSearch():
         return
 
     def GetAllCandidatesLinks(self, gui_queue, new_status, more_or_less, must_age, city, phone_number, keywords):
+
         all_candidates = self.driver.find_elements_by_class_name("card--9vbZ_")
-        # all_candidates = self.driver.find_elements_by_class_name("root--pbFXB")
 
         all_candidate_links = {}
 
         for candidate in all_candidates:
-            candidate.click()
-            cont = False
-            time.sleep(0.6)
+            try:
+                candidate.click()
+            except selenium.common.exceptions.StaleElementReferenceException:
+                print("Произошла ошибка. Нажмите кнопку Submit\n"
+                      "(Старый браузер можно закрыть)")
+
+            age = None
+
+            time.sleep(1)
             candidate_link = self.driver.find_element_by_class_name("active--2F4Qd").find_element_by_tag_name(
                 "a").get_attribute("href")
             name = self.driver.find_element_by_class_name("title--zagSG").get_attribute(
-                "textContent").split(' ')[5].strip() if not 'Скрыто' else ''
-            print(name)
+                "textContent").split(' ')[5].strip()
+
             # Получение возраста человека
             if must_age != '':
                 try:
-                    age = \
-                    self.driver.find_element_by_xpath("//*[@class='dd--1rRof']").el.get_attribute("textContent").split(
-                        ' ')[0]
-                    print(age)
+                    all_dds = self.driver.find_elements_by_xpath("//*[@class='dd--1rRof']")
+                    for dd in all_dds:
+                        age = re.findall(r"\d* (?:лет|года|год)", dd.get_attribute("textContent"))
+                        if age:
+                            age = int(re.sub(r"\D*", "", age[0]))
+                            break
+                    if not age:
+                        continue
+
                     if more_or_less == True:
-                        if int(age) < int(must_age):
+                        if '-' in must_age:
+                            if not (int(must_age.split("-")[0]) <= int(age) <= int(must_age.split("-")[1])):
+                                continue
+                        elif int(age) < int(must_age):
                             continue
                     else:
-                        if int(age) > int(must_age):
+                        if '-' in must_age:
+                            if not (int(must_age.split("-")[0]) <= int(age) <= int(must_age.split("-")[1])):
+                                continue
+                        elif int(age) > int(must_age):
                             continue
-                    # all_dds = self.driver.find_element_by_class_name(
-                    #     "dd--1rRof").find_elements_by_tag_name("dd")
-                    # for el in all_dds:
-                    #     if "лет" in el.get_attribute("textContent") or "года" in el.get_attribute("textContent"):
-                    #         age = el.get_attribute("textContent").split(' ')[0]
-                    # if age is None:
-                    #     continue
                 except:
                     continue
 
-            # Получение города проживания
+            # Получение города проживания и проверка на соответствие ключевым словам
+            # Объединено в одно условие, потому что просмотр идёт в одном поле + общий except
             if city != '' or keywords != '':
-                try:
+
+                if city != '':
                     desc = self.driver.find_element_by_class_name(
-                        "resume-external-block__description").get_attribute("textContent")
-                    # С помощью этой строчки регистр keywords не имеет значения
-                    desc_city = desc.split()
-                    desc_city = [el.lower() for el in desc_city]
-                    # print(desc)
+                        "content--2uXLG").get_attribute("textContent")
+                    candidate_city = city.lower() in desc.lower()
+                    if not candidate_city:
+                        continue
+
+                try:
+                    desc = ''
+                    all_descriptions = self.driver.find_elements_by_xpath("//*[@class='resume-external-block__description resume-external-block__description_padding']")
+                    all_bold = self.driver.find_elements_by_xpath("//*[@class='resume-external-block__bold']")
+
+                    for i in all_descriptions:
+                        desc += i.get_attribute("textContent")
+                    for i in all_bold:
+                        desc += i.get_attribute("textContent")
+
+                    while '  ' in desc:
+                        desc = desc.replace('  ', ' ')
                     if keywords != '':
                         try:
                             keywords = keywords.split(', ')
                         except:
                             pass
-                        for word in keywords:
-                            if word.lower() not in desc.lower():
-                                cont = True
 
-                    if city != '':
-                        candidate_city = city.lower() in desc.lower()
-                        # if not candidate_city:
-                        #     continue
-                        print(name, candidate_city, age)
+                        class ContinueI(Exception):
+                            pass
 
+                        try:
+                            for word in keywords:
+                                if word.lower() not in desc.lower():
+                                    raise ContinueI
+                        except ContinueI:
+                            continue
                 except Exception as ex:
                     gui_queue.put(ex)
                     continue
@@ -360,9 +368,6 @@ class HuntflowSearch():
                 except:
                     continue
 
-            if cont:
-                continue
-
             # Присвоение кандидату нового статуса
 
             if new_status != '':
@@ -374,6 +379,7 @@ class HuntflowSearch():
             all_candidate_links[name] = candidate_link
 
             time.sleep(1)
+            print(name)
         return all_candidate_links
 
     def UploadResume(self, path_to_resume: str, number):
@@ -482,13 +488,6 @@ class HuntflowSearch():
     def Perform2(self, gui_queue, email, password, vacancy_number, message_amount):
         self.Auth(email, password, gui_queue)
         time.sleep(2)
-        # while EC.presence_of_element_located((By.XPATH, "//*[@class='dashboard-group__more-vacancies-button']")):
-        #     self.ClickMoreVacancies(gui_queue)
-        #     time.sleep(1)
-
-        # while self.CheckPresenceOfElementByClassName("dashboard-group__more-vacancies-button"):
-        #     self.ClickMoreVacancies(gui_queue)
-        #     time.sleep(2)
 
         self.ClickMoreVacancies(gui_queue)
         time.sleep(1)
@@ -509,10 +508,6 @@ class HuntflowSearch():
                 self.driver.find_elements_by_xpath("//*[@class='root--2MJQk']/*[contains(@class, 'root--pbFXB')]"))
             print(visible_amount_of_candidates, actual_amount_of_candidates)
             while visible_amount_of_candidates != actual_amount_of_candidates:
-                last_candidate_on_page = \
-                    self.driver.find_elements_by_xpath("//*[@class='root--2MJQk']/*[contains(@class, 'root--pbFXB')]")[
-                        -1]
-                # last_candidate_on_page.send_keys(Keys.END)
                 self.driver.find_element_by_xpath(
                     "//*[@class='layout__list js-layout-sidebar js-applicant-items']").click()
                 self.driver.find_element_by_xpath(
