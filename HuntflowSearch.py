@@ -1,12 +1,10 @@
 import os
-import queue
+
 import re
 import shutil
 import time
 from random import uniform
-from threading import Thread
 
-import PySimpleGUI as sg
 import selenium.common.exceptions
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -14,15 +12,12 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 
+
 # Entering email and password
-
-with open('login_data.txt', 'r', encoding='utf-8') as file:
-    email, password, firefox_profile_link = file.readlines()
-
 
 # MainClass
 class HuntflowSearch():
-    def __init__(self):
+    def __init__(self, firefox_profile_link):
         self.huntflow_url = "https://huntflow.ru/my/recruit-online#applicants"
         self.user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:99.0) Gecko/20100101 Firefox/99.0'
         self.options = webdriver.FirefoxOptions()
@@ -111,15 +106,68 @@ class HuntflowSearch():
                 self.driver.switch_to_alert().dismiss()
                 time.sleep(1)
             self.OpenLink(huntflow_link)
-        time.sleep(1)
-        self.driver.find_element_by_class_name("applicant-card-vacancy-status__button").click()
-        time.sleep(0.45)
-        all_ahrefs = self.driver.find_elements_by_class_name("nav-list-item")
-        for el in all_ahrefs:
-            if f"{status.lower()}" in el.find_element_by_tag_name("a").get_attribute("textContent").lower():
-                el.find_element_by_tag_name("a").click()
-                break
-        time.sleep(0.8)
+        try:
+            time.sleep(1)
+            vacancy_number = re.findall(r"y/\d*/f", self.driver.current_url)[0][2:-2]
+            green_button = self.driver.find_element_by_xpath(
+                f"//*[@class='button button_green js-item-vacancy-connect-button{vacancy_number}']")
+            green_button.click()
+            all_labels = self.driver.find_elements_by_xpath(
+                "//*[@class='root--3eQvm statusesList--pqhkh']/*[@class='itemName--1FsvZ']")
+
+            for label in all_labels:
+                if status.split('-')[0].lower() in label.get_attribute("title").lower():
+                    label.click()
+                    time.sleep(1)
+
+            if "отказ" in status.lower():
+                reason = status.split('-')[1]
+                all_labels = self.driver.find_elements_by_xpath("//*[@class='root--3eQvm rejectReasonsList--3Hdf-']/*[@class='itemName--1FsvZ']")
+
+                for label in all_labels:
+                    if reason.lower() in label.get_attribute("title").lower():
+                        label.click()
+                        time.sleep(1)
+                        break
+                self.driver.find_element_by_xpath("//*[@class='button--2kgzJ button']").click()
+            else:
+                self.driver.find_element_by_xpath("//*[@class='button--2kgzJ button']").click()
+
+        except Exception as ex:
+            print(ex)
+        return
+
+    def SetHuntflowStatus(self, status: str):
+
+        try:
+            time.sleep(1)
+            vacancy_number = re.findall(r"y/\d*/f", self.driver.current_url)[0][2:-2]
+            green_button = self.driver.find_element_by_xpath(
+                f"//*[@class='button button_green js-item-vacancy-connect-button{vacancy_number}']")
+            green_button.click()
+            all_labels = self.driver.find_elements_by_xpath(
+                "//*[@class='root--3eQvm statusesList--pqhkh']/*[@class='itemName--1FsvZ']")
+
+            for label in all_labels:
+                if status.split('-')[0].lower() in label.get_attribute("title").lower():
+                    label.click()
+                    time.sleep(1)
+
+            if "отказ" in status.lower():
+                reason = status.split('-')[1]
+                all_labels = self.driver.find_elements_by_xpath("//*[@class='root--3eQvm rejectReasonsList--3Hdf-']/*[@class='itemName--1FsvZ']")
+
+                for label in all_labels:
+                    if reason.lower() in label.get_attribute("title").lower():
+                        label.click()
+                        time.sleep(1)
+                        break
+                self.driver.find_element_by_xpath("//*[@class='button--2kgzJ button']").click()
+            else:
+                self.driver.find_element_by_xpath("//*[@class='button--2kgzJ button']").click()
+
+        except Exception as ex:
+            print(ex)
         return
 
     def SendMessage(self, string: str, number: str, photo_path=''):
@@ -201,13 +249,28 @@ class HuntflowSearch():
     def ClickOnTag(self, tag="В работе", need_amount=False):
         time.sleep(1)
         tag_span = self.driver.find_elements_by_xpath(
-            "//*[@class='item--2IRYQ']")
+            "//*[contains(@class, 'item--2IRYQ')]")
+        actual_amount_of_candidates = None
+        visible_amount_of_candidates = None
 
         for current_tag in tag_span:
             if tag.lower() in current_tag.get_attribute("textContent").lower().strip():
                 time.sleep(1)
+                actual_amount_of_candidates = int(re.findall("\d+", current_tag.get_attribute("textContent"))[0])
                 current_tag.click()
+                time.sleep(1)
                 break
+
+        try:
+            while visible_amount_of_candidates != actual_amount_of_candidates:
+                visible_amount_of_candidates = len(self.driver.find_elements_by_xpath("//*[contains(@class, 'root--pbFXB')]"))
+                self.driver.find_elements_by_xpath("//*[contains(@class, 'root--pbFXB')]")[-1].click()
+                action = webdriver.ActionChains(self.driver)
+                action.send_keys(Keys.PAGE_DOWN).perform()
+                time.sleep(4)
+        except Exception as ex:
+            print("Ошибка в прокрутке кандидатов.")
+            print(ex)
         return
 
     def GetAllCandidatesWhatsAppLinks(self, quantity):
@@ -230,7 +293,8 @@ class HuntflowSearch():
                     self.SetHuntflowStatus("позвонить")
                     time.sleep(1)
                     continue
-                phone_number = re.sub(r"\D", "", self.driver.find_element_by_xpath("//*[@class='phone--DtMb2 link--1k7bx']").get_attribute("textContent"))
+                phone_number = re.sub(r"\D", "", self.driver.find_element_by_xpath(
+                    "//*[@class='phone--DtMb2 link--1k7bx']").get_attribute("textContent"))
                 all_whatsapp_links[
                     name] = f"https://wa.me/{phone_number} "
                 all_candidate_links[name] = candidate_link
@@ -243,24 +307,9 @@ class HuntflowSearch():
             time.sleep(1)
         return [all_whatsapp_links, all_candidate_links]
 
-    def SetHuntflowStatus(self, status: str):
-        time.sleep(1)
-        self.driver.find_element_by_class_name("applicant-card-vacancy-status__button").click()
-        time.sleep(0.7)
-        all_ahrefs = self.driver.find_elements_by_xpath("//*[@class='root--3eQvm statusesList--pqhkh']")
-        for el in all_ahrefs:
-            if f"{status.lower()}" in el.find_element_by_class_name("itemName--1FsvZ").get_attribute(
-                    "textContent").lower():
-                time.sleep(0.7)
-                el.click()
-                break
-        time.sleep(0.5)
-        self.driver.find_element_by_xpath("//*[@class='button--2kgzJ button']").click()
-        return
-
     def GetAllCandidatesLinks(self, gui_queue, new_status, more_or_less, must_age, city, phone_number, keywords):
 
-        all_candidates = self.driver.find_elements_by_class_name("card--9vbZ_")
+        all_candidates = self.driver.find_elements_by_xpath("//*[contains(@class, 'root--pbFXB')]")
 
         all_candidate_links = {}
 
@@ -319,7 +368,8 @@ class HuntflowSearch():
 
                 try:
                     desc = ''
-                    all_descriptions = self.driver.find_elements_by_xpath("//*[@class='resume-external-block__description resume-external-block__description_padding']")
+                    all_descriptions = self.driver.find_elements_by_xpath(
+                        "//*[@class='resume-external-block__description resume-external-block__description_padding']")
                     all_bold = self.driver.find_elements_by_xpath("//*[@class='resume-external-block__bold']")
 
                     for i in all_descriptions:
@@ -434,143 +484,6 @@ class HuntflowSearch():
         os.remove(path_to_resume)
         return
 
-    def Perform1(self, email, password, gui_queue, number, tag, must_age, new_status, more_or_less, city, phone_number,
-                 keywords):
-        self.Auth(email, password, gui_queue)
-        self.ClickMoreVacancies(gui_queue)
-        time.sleep(1)
-        while self.CheckPresenceOfElementByClassName("dashboard-group__more-vacancies-button"):
-            try:
-                self.ClickMoreVacancies(gui_queue)
-            except:
-                print("Все вакансии видны")
-            time.sleep(2)
-        self.OpenLink(self.GetLinkOfVac(number))
-        time.sleep(1)
-        actual_amount_of_candidates = self.ClickOnTag(tag)
-
-        # try:
-        #     def ScrollIntoView(element):
-        #         actions = ActionChains(driver=self.driver)
-        #         actions.move_to_element(element).perform()
-        #
-        #     visible_amount_of_candidates = self.driver.find_element_by_class_name(
-        #         "root--2MJQk").find_elements_by_class_name("link--p2vMM")
-        #
-        #     while len(visible_amount_of_candidates) != actual_amount_of_candidates:
-        #         last_candidate_on_page = \
-        #             self.driver.find_element_by_class_name("root--2MJQk").find_elements_by_tag_name("div")[-1]
-        #         # ScrollIntoView(last_candidate_on_page)
-        #         time.sleep(15)
-        #         visible_amount_of_candidates = self.driver.find_element_by_class_name(
-        #             "root--2MJQk").find_elements_by_class_name("link--p2vMM")
-        # except Exception as ex:
-        #     print(ex)
-
-        time.sleep(15)
-
-        results = self.GetAllCandidatesLinks(gui_queue, new_status, more_or_less, must_age, city, phone_number,
-                                             keywords)
-        time.sleep(1)
-        with open("Результаты поиска.txt", 'w', encoding='utf-8') as file:
-            for name in results:
-                file.write(f"{name} {results[name]}\n")
-        return
-
-    def Perform2(self, gui_queue, email, password, vacancy_number, message_amount):
-        self.Auth(email, password, gui_queue)
-        time.sleep(2)
-
-        self.ClickMoreVacancies(gui_queue)
-        time.sleep(1)
-        while self.CheckPresenceOfElementByClassName("dashboard-group__more-vacancies-button"):
-            self.ClickMoreVacancies(gui_queue)
-            time.sleep(2)
-
-        self.OpenLink(self.GetLinkOfVac(vacancy_number))
-        time.sleep(1)
-
-        actual_amount_of_candidates = self.ClickOnTag("Отправить wa", True)
-
-        try:
-            print("Clicked on tag")
-            time.sleep(15)
-            self.driver.find_element_by_class_name("root--pbFXB").click()
-            # visible_amount_of_candidates = len(
-            #     self.driver.find_elements_by_xpath("//*[@class='root--2MJQk']/*[contains(@class, 'root--pbFXB')]"))
-            # print(visible_amount_of_candidates, actual_amount_of_candidates)
-            # while visible_amount_of_candidates != actual_amount_of_candidates:
-            #     self.driver.find_element_by_xpath(
-            #         "//*[@class='layout__list js-layout-sidebar js-applicant-items']").click()
-            #     self.driver.find_element_by_xpath(
-            #         "//*[@class='layout__list js-layout-sidebar js-applicant-items']").send_keys(Keys.END)
-            #     time.sleep(2.5)
-            #     visible_amount_of_candidates = len(
-            #         self.driver.find_elements_by_xpath("//*[@class='root--2MJQk']/*[contains(@class, 'root--pbFXB')]"))
-            #     print(visible_amount_of_candidates)
-        except Exception as ex:
-            print(ex)
-
-        with open('WhatsAppLinks.txt', 'w', encoding='utf-8') as file:
-            whatsapp_links, huntflow_links = self.GetAllCandidatesWhatsAppLinks(message_amount)
-            for name in whatsapp_links:
-                if ' ' in name:
-                    name = name.replace(' ', '')
-                if '\n' in name:
-                    name = name.replace('\n', '')
-                if 'фио' in name.lower():
-                    continue
-                try:
-                    string = f"{name} {whatsapp_links[name]} {huntflow_links[name]}\n"
-                except Exception as ex:
-                    print(ex)
-                    pass
-                while '  ' in string:
-                    string = string.replace('  ', ' ')
-                file.write(string)
-        time.sleep(3)
-
-        with open('WhatsAppLinks.txt', 'r', encoding='utf-8') as file:
-            strings = file.readlines()
-            for line_number in range(message_amount):
-                # self.will_stop меняется в SendMessage()
-                if not self.will_stop:
-                    self.SendMessage(strings[line_number], vacancy_number, self.get_photo())
-                    time.sleep(2 + uniform(0.5, 1.5))
-                else:
-                    break
-        return
-
-    def Perform3(self, gui_queue, email, password):
-        paths = self.GetAllResumePaths()
-        print(paths)
-        self.Auth(email, password, gui_queue)
-        self.ClickMoreVacancies(gui_queue)
-        time.sleep(1)
-        while self.CheckPresenceOfElementByClassName("dashboard-group__more-vacancies-button"):
-            self.ClickMoreVacancies(gui_queue)
-            time.sleep(2)
-        for number in paths:
-            # print(number)
-            # print(self.GetLinkOfVac(number))
-
-            time.sleep(1)
-            for el in paths[number]:
-                if number != "база":
-                    number = number.split(' ')[0]
-                try:
-                    print(el)
-                    self.OpenLink(self.GetLinkOfVac(number))
-                    time.sleep(1)
-                    self.UploadResume(el, number)
-                except Exception as ex:
-                    print("Произошла ошибка!")
-                    print("Текст:")
-                    self.OpenLink(self.GetLinkOfVac(number))
-                    time.sleep(1)
-                    print(ex)
-        return
-
     def get_photo(self):
         if not (os.path.isfile("photo.jpg") or os.path.isfile("photo .png")):
             return ''
@@ -578,107 +491,6 @@ class HuntflowSearch():
         return photo_path
 
 
-# GUI Function/Loop
-def gui_loop():
-    gui_queue = queue.Queue()
-    sg.theme("DarkAmber")
-
-    gg = [[sg.Text("Номер вакансии: ")],
-          [sg.Text("Тег")],
-          [sg.Text("Город: ")],
-          [sg.Text("Ключевые слова: ")],
-          [sg.Text("Номер: ")],
-          [sg.Text("Поменять статус на: ")],
-          [sg.Text("Желаемый возраст: ")],
-          ]
-    easy = [
-        [sg.Input(key="-VACANCY_NUMBER-")],
-        [sg.Input(key="-TAG-", default_text="В работе")],
-        [sg.Input(key="-CITY-")],
-        [sg.Input(key='-KEY_WORDS-')],
-        [sg.Input(key='-PHONE_NUMBER-')],
-        [sg.Input(key='-NEW_STATUS-')],
-        [sg.Input(key='-MUST_AGE-')],
-    ]
-    layout1 = [
-        [sg.Column(gg, visible=True), sg.Column(easy)],
-        [sg.Radio("Больше", group_id=0, key=228), sg.Radio("Меньше", group_id=0)],
-        [sg.Submit(), sg.Cancel()]
-    ]
-
-    layout2 = [
-        [sg.Column([
-            [sg.Text("Введите кол-во сообщений: ")],
-            [sg.Text("Введите номер вакансии: ")]
-        ]),
-            sg.Column([
-                [sg.Input(key='-MESSAGE_AMOUNT-')],
-                [sg.Input(key='-VACANCY_NUMBER_LAY2-')]
-            ])],
-        [sg.Submit(), sg.Cancel()]
-    ]
-
-    layout = [
-        [sg.Column(layout1, key="-COL1-"),
-         sg.Column(layout2, visible=False, key='-COL2-')],
-        [sg.Button("1"), sg.Button("2"), sg.Button("Загрузить резюме", key='-LOAD_RESUME-')],
-        [sg.Output(size=(63, 15))]
-    ]
-    lay = 1
-    window = sg.Window('Huntflow Programs', layout)
-    app = HuntflowSearch()
-
-    while True:  # The Event Loop
-        event, values = window.Read(timeout=100)
-        if event in (None, "Exit", "Cancel"):
-            app.driver.close()
-            app.driver.quit()
-            break
-
-        try:
-            message = gui_queue.get_nowait()
-        except queue.Empty:
-            message = None
-        if message is not None:
-            print(message)
-
-        if event in '12':
-            print(event)
-            window[f"-COL{lay}-"].update(visible=False)
-            lay = int(event)
-            window[f"-COL{lay}-"].update(visible=True)
-
-        if event == "Submit" and lay == 1:
-            try:
-                thread = Thread(target=app.Perform1,
-                                args=(email, password, gui_queue, values["-VACANCY_NUMBER-"], values["-TAG-"],
-                                      values["-MUST_AGE-"], values["-NEW_STATUS-"], values[228], values['-CITY-'],
-                                      values['-PHONE_NUMBER-'], values['-KEY_WORDS-']),
-                                daemon=True)
-                thread.start()
-            except Exception as ex:
-                print(ex)
-        if event == "Submit0" and lay == 2:
-            try:
-                thread = Thread(target=app.Perform2,
-                                args=(
-                                    gui_queue, email, password, values['-VACANCY_NUMBER_LAY2-'],
-                                    int(values["-MESSAGE_AMOUNT-"])),
-                                daemon=True)
-                thread.start()
-            except Exception as ex:
-                print(ex)
-
-        if event == '-LOAD_RESUME-':
-            try:
-                thread = Thread(target=app.Perform3,
-                                args=(gui_queue, email, password),
-                                daemon=True)
-                thread.start()
-            except Exception as ex:
-                print(ex)
-
 
 if __name__ == '__main__':
-    gui_loop()
-    print("Exiting Program")
+    pass

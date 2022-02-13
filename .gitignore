@@ -8,3 +8,4 @@
 *.log
 *.spec
 !requirements.txt
+test.py
