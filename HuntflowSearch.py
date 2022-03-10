@@ -222,9 +222,9 @@ class HuntflowSearch():
             print(str(ex))
             self.SetHuntflowStatusWithLink("Позвонить", huntflow_link)
         time.sleep(1)
-        self.driver.find_element_by_xpath(
-            "/html/body/div[2]/div[2]/div[2]/div[2]/div[2]/div/div[4]/ul/li/div[1]/div[1]/div/div/div/form/div[2]/div[2]/div[7]/div/button[1]").click()
-        time.sleep(1.5)
+        # self.driver.find_element_by_xpath(
+            # "/html/body/div[2]/div[2]/div[2]/div[2]/div[2]/div/div[4]/ul/li/div[1]/div[1]/div/div/div/form/div[2]/div[2]/div[7]/div/button[1]").click()
+        # time.sleep(1.5)
         return
 
     def GetAllVacanciesFromMainPage(self):
@@ -269,6 +269,7 @@ class HuntflowSearch():
                 action.send_keys(Keys.PAGE_DOWN).perform()
                 time.sleep(4)
         except Exception as ex:
+            time.sleep(20)
             print("Ошибка в прокрутке кандидатов.")
             print(ex)
         return
@@ -296,7 +297,7 @@ class HuntflowSearch():
                 phone_number = re.sub(r"\D", "", self.driver.find_element_by_xpath(
                     "//*[@class='phone--DtMb2 link--1k7bx']").get_attribute("textContent"))
                 all_whatsapp_links[
-                    name] = f"https://wa.me/{phone_number} "
+                    name] = f"https://web.whatsapp.com/send?phone={phone_number} "
                 all_candidate_links[name] = candidate_link
                 k += 1
             except:
@@ -323,6 +324,8 @@ class HuntflowSearch():
             age = None
 
             time.sleep(1)
+            # https://web.whatsapp.com/send?phone=79656689077
+
             candidate_link = self.driver.find_element_by_class_name("active--2F4Qd").find_element_by_tag_name(
                 "a").get_attribute("href")
             name = self.driver.find_element_by_class_name("title--zagSG").get_attribute(

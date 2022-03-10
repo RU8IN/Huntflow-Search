@@ -79,12 +79,13 @@ class Performs():
         with open('WhatsAppLinks.txt', 'r', encoding='utf-8') as file:
             strings = file.readlines()
             for line_number in range(message_amount):
-                # self.huntflow.will_stop меняется в SendMessage()
-                if not self.huntflow.will_stop:
-                    self.huntflow.SendMessage(strings[line_number], vacancy_number, self.huntflow.get_photo())
-                    time.sleep(2 + uniform(0.5, 1.5))
-                else:
+
+                if self.huntflow.will_stop:
                     break
+
+                self.huntflow.SendMessage(strings[line_number], vacancy_number, self.huntflow.get_photo())
+                time.sleep(2 + uniform(0.5, 1.5))
+
         return
 
     def Perform3(self, gui_queue, email, password):
